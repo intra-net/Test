@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Federation Defense Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+    }
+
+    #map {
+      height: 80vh;
+      width: 100%;
+    }
+
+    #controls {
+      padding: 10px;
+      background: #1e1e1e;
+      color: #fff;
+    }
+
+    #log {
+      height: 20vh;
+      overflow-y: auto;
+      background: #f4f4f4;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+
+    .form-row {
+      margin-bottom: 5px;
+    }
+
+    select, button {
+      padding: 5px;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="controls">
+    <div class="form-row">
+      <label>Unit:</label>
+      <select id="unitType">
+        <option value="infantry">Infantry</option>
+        <option value="armor">Armor</option>
+        <option value="artillery">Artillery</option>
+        <option value="recon">Recon</option>
+        <option value="air">Air Support</option>
+      </select>
+
+      <label>Action:</label>
+      <select id="actionType">
+        <option value="move">Move</option>
+        <option value="defend">Defend</option>
+        <option value="attack">Attack</option>
+        <option value="evacuate">Evacuate</option>
+      </select>
+
+      <button onclick="startCommand()">Execute Order</button>
+    </div>
+  </div>
+  <div id="log"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map').setView([44.2, 17.9], 7); // BiH center
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(map);
+
+    const unitIcons = {
+      infantry: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2285/2285431.png', iconSize: [24, 24] }),
+      armor: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3103/3103922.png', iconSize: [24, 24] }),
+      artillery: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2965/2965567.png', iconSize: [24, 24] }),
+      recon: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/1699/1699861.png', iconSize: [24, 24] }),
+      air: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/616/616408.png', iconSize: [24, 24] }),
+    };
+
+    let units = [];
+
+    function log(message) {
+      const logBox = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logBox.innerHTML = `[${timestamp}] ${message}<br>` + logBox.innerHTML;
+    }
+
+    function startCommand() {
+      const type = document.getElementById('unitType').value;
+      const action = document.getElementById('actionType').value;
+      log(`Order issued: ${type.toUpperCase()} to ${action.toUpperCase()} – Click on the map to place.`);
+      
+      map.once('click', function(e) {
+        const { lat, lng } = e.latlng;
+        const marker = L.marker([lat, lng], { icon: unitIcons[type] }).addTo(map);
+        marker.bindPopup(`${type.toUpperCase()} - ${action.toUpperCase()}`).openPopup();
+        units.push({ type, action, lat, lng });
+        log(`Unit deployed: ${type} at (${lat.toFixed(3)}, ${lng.toFixed(3)}) executing ${action}`);
+      });
+    }
+
+    // Simulate enemy actions
+    setInterval(() => {
+      const lat = 43.9 + Math.random();
+      const lng = 18.3 + Math.random();
+      L.circle([lat, lng], { color: 'red', radius: 5000 }).addTo(map);
+      log(`⚠️ Enemy activity detected near (${lat.toFixed(2)}, ${lng.toFixed(2)})`);
+    }, 20000); // every 20 seconds
+
+    // Simulate weather changes
+    setInterval(() => {
+      const conditions = ['Clear', 'Rain', 'Fog', 'Snow'];
+      const current = conditions[Math.floor(Math.random() * conditions.length)];
+      log(`🌦️ Weather changed: ${current}`);
+    }, 30000); // every 30 seconds
+
+    // Simulate civilian displacement
+    setInterval(() => {
+      const lat = 44 + Math.random() * 1.5;
+      const lng = 17 + Math.random() * 1.5;
+      log(`🚸 Civilians reported evacuating from (${lat.toFixed(2)}, ${lng.toFixed(2)})`);
+    }, 45000); // every 45 seconds
+  </script>
+</body>
+</html>
