@@ -2,132 +2,205 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Federation Defense Simulation</title>
+  <title>Federation Defense Simulation 2.0</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
   <style>
     body, html {
       margin: 0;
       padding: 0;
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
     }
 
     #map {
-      height: 80vh;
+      height: 70vh;
       width: 100%;
     }
 
     #controls {
-      padding: 10px;
-      background: #1e1e1e;
+      background: #222;
       color: #fff;
-    }
-
-    #log {
-      height: 20vh;
-      overflow-y: auto;
-      background: #f4f4f4;
       padding: 10px;
-      font-family: monospace;
-      font-size: 14px;
-    }
-
-    .form-row {
-      margin-bottom: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
     }
 
     select, button {
       padding: 5px;
-      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    #log, #unitList {
+      height: 15vh;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+    }
+
+    #log {
+      background: #f8f8f8;
+    }
+
+    #unitList {
+      background: #333;
+      color: #fff;
+    }
+
+    .unit-item {
+      border-bottom: 1px solid #555;
+      padding: 5px;
+    }
+
+    .zone-line {
+      color: rgba(0, 0, 0, 0.2);
     }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="controls">
-    <div class="form-row">
-      <label>Unit:</label>
-      <select id="unitType">
-        <option value="infantry">Infantry</option>
-        <option value="armor">Armor</option>
-        <option value="artillery">Artillery</option>
-        <option value="recon">Recon</option>
-        <option value="air">Air Support</option>
-      </select>
 
-      <label>Action:</label>
-      <select id="actionType">
-        <option value="move">Move</option>
-        <option value="defend">Defend</option>
-        <option value="attack">Attack</option>
-        <option value="evacuate">Evacuate</option>
-      </select>
+<div id="map"></div>
 
-      <button onclick="startCommand()">Execute Order</button>
-    </div>
-  </div>
-  <div id="log"></div>
+<div id="controls">
+  <label><i class="fas fa-user-shield"></i> Unit:</label>
+  <select id="unitType">
+    <option value="infantry">Infantry</option>
+    <option value="armor">Armor</option>
+    <option value="artillery">Artillery</option>
+    <option value="recon">Recon</option>
+    <option value="air">Air Support</option>
+  </select>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map').setView([44.2, 17.9], 7); // BiH center
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
+  <label><i class="fas fa-bullseye"></i> Action:</label>
+  <select id="actionType">
+    <option value="move">Move</option>
+    <option value="defend">Defend</option>
+    <option value="attack">Attack</option>
+    <option value="evacuate">Evacuate</option>
+  </select>
+
+  <button onclick="startCommand()"><i class="fas fa-play"></i> Execute</button>
+</div>
+
+<div id="unitList"><strong>Units:</strong><br></div>
+<div id="log"><strong>Log:</strong><br></div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map').setView([44.2, 17.9], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+  }).addTo(map);
+
+  // Raster einzeichnen
+  const gridSize = 0.5; // 0.5° Gitter
+  for (let lat = 42; lat <= 46; lat += gridSize) {
+    L.polyline([[lat, 15], [lat, 20]], {color: "#888", weight: 1, dashArray: '5,5', className: "zone-line"}).addTo(map);
+  }
+  for (let lng = 15; lng <= 20; lng += gridSize) {
+    L.polyline([[42, lng], [46, lng]], {color: "#888", weight: 1, dashArray: '5,5', className: "zone-line"}).addTo(map);
+  }
+
+  // Einheiten
+  let unitId = 0;
+  const units = [];
+
+  function log(msg) {
+    const logBox = document.getElementById('log');
+    const time = new Date().toLocaleTimeString();
+    logBox.innerHTML = `[${time}] ${msg}<br>` + logBox.innerHTML;
+  }
+
+  function updateUnitList() {
+    const list = document.getElementById('unitList');
+    list.innerHTML = `<strong>Units:</strong><br>`;
+    units.forEach(u => {
+      list.innerHTML += `<div class="unit-item">
+        ID: ${u.id}, ${u.type.toUpperCase()} (${u.action}) @ ${u.lat.toFixed(2)},${u.lng.toFixed(2)} 
+        <button onclick="removeUnit(${u.id})">Remove</button>
+      </div>`;
+    });
+  }
+
+  function removeUnit(id) {
+    const idx = units.findIndex(u => u.id === id);
+    if (idx !== -1) {
+      map.removeLayer(units[idx].marker);
+      units.splice(idx, 1);
+      updateUnitList();
+      log(`Unit ${id} removed`);
+    }
+  }
+
+  function startCommand() {
+    const type = document.getElementById('unitType').value;
+    const action = document.getElementById('actionType').value;
+    log(`New Command: ${type.toUpperCase()} to ${action.toUpperCase()} – Click on map`);
+    map.once('click', e => {
+      const { lat, lng } = e.latlng;
+      const icon = L.divIcon({className: 'fa', html: getIcon(type), iconSize: [20, 20]});
+      const marker = L.marker([lat, lng], {icon}).addTo(map);
+      marker.bindPopup(`${type.toUpperCase()} – ${action.toUpperCase()}`);
+      units.push({id: unitId++, type, action, lat, lng, marker});
+      updateUnitList();
+      log(`Unit deployed: ${type.toUpperCase()} executing ${action} at ${lat.toFixed(2)},${lng.toFixed(2)}`);
+      simulateCombat(type, action, lat, lng);
+    });
+  }
+
+  function getIcon(type) {
+    switch (type) {
+      case 'infantry': return '<i class="fas fa-person-rifle" style="color:black;"></i>';
+      case 'armor': return '<i class="fas fa-tank" style="color:darkgreen;"></i>';
+      case 'artillery': return '<i class="fas fa-bomb" style="color:maroon;"></i>';
+      case 'recon': return '<i class="fas fa-binoculars" style="color:darkblue;"></i>';
+      case 'air': return '<i class="fas fa-jet-fighter-up" style="color:gray;"></i>';
+      default: return '<i class="fas fa-question"></i>';
+    }
+  }
+
+  function simulateCombat(type, action, lat, lng) {
+    if (action === "attack" || action === "defend") {
+      setTimeout(() => {
+        const weatherFactor = Math.random() < 0.3 ? 0.5 : 1;
+        const outcome = Math.random() * weatherFactor;
+        if (outcome > 0.6) {
+          log(`✅ ${type.toUpperCase()} SUCCESS at ${lat.toFixed(2)},${lng.toFixed(2)}`);
+        } else {
+          log(`❌ ${type.toUpperCase()} FAILED – losses reported.`);
+        }
+      }, 3000);
+    }
+  }
+
+  // Regenwolken simulieren
+  function spawnCloud() {
+    const lat = 43.8 + Math.random() * 1.5;
+    const lng = 17 + Math.random() * 2;
+    const circle = L.circle([lat, lng], {
+      color: 'blue',
+      fillColor: 'lightblue',
+      fillOpacity: 0.3,
+      radius: 10000
     }).addTo(map);
+    log(`🌧️ Rain cloud over (${lat.toFixed(2)}, ${lng.toFixed(2)})`);
+    setTimeout(() => map.removeLayer(circle), 30000); // Remove after 30s
+  }
+  setInterval(spawnCloud, 45000); // every 45s
 
-    const unitIcons = {
-      infantry: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2285/2285431.png', iconSize: [24, 24] }),
-      armor: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3103/3103922.png', iconSize: [24, 24] }),
-      artillery: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2965/2965567.png', iconSize: [24, 24] }),
-      recon: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/1699/1699861.png', iconSize: [24, 24] }),
-      air: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/616/616408.png', iconSize: [24, 24] }),
-    };
-
-    let units = [];
-
-    function log(message) {
-      const logBox = document.getElementById('log');
-      const timestamp = new Date().toLocaleTimeString();
-      logBox.innerHTML = `[${timestamp}] ${message}<br>` + logBox.innerHTML;
-    }
-
-    function startCommand() {
-      const type = document.getElementById('unitType').value;
-      const action = document.getElementById('actionType').value;
-      log(`Order issued: ${type.toUpperCase()} to ${action.toUpperCase()} – Click on the map to place.`);
-      
-      map.once('click', function(e) {
-        const { lat, lng } = e.latlng;
-        const marker = L.marker([lat, lng], { icon: unitIcons[type] }).addTo(map);
-        marker.bindPopup(`${type.toUpperCase()} - ${action.toUpperCase()}`).openPopup();
-        units.push({ type, action, lat, lng });
-        log(`Unit deployed: ${type} at (${lat.toFixed(3)}, ${lng.toFixed(3)}) executing ${action}`);
-      });
-    }
-
-    // Simulate enemy actions
-    setInterval(() => {
-      const lat = 43.9 + Math.random();
-      const lng = 18.3 + Math.random();
-      L.circle([lat, lng], { color: 'red', radius: 5000 }).addTo(map);
-      log(`⚠️ Enemy activity detected near (${lat.toFixed(2)}, ${lng.toFixed(2)})`);
-    }, 20000); // every 20 seconds
-
-    // Simulate weather changes
-    setInterval(() => {
-      const conditions = ['Clear', 'Rain', 'Fog', 'Snow'];
-      const current = conditions[Math.floor(Math.random() * conditions.length)];
-      log(`🌦️ Weather changed: ${current}`);
-    }, 30000); // every 30 seconds
-
-    // Simulate civilian displacement
-    setInterval(() => {
-      const lat = 44 + Math.random() * 1.5;
-      const lng = 17 + Math.random() * 1.5;
-      log(`🚸 Civilians reported evacuating from (${lat.toFixed(2)}, ${lng.toFixed(2)})`);
-    }, 45000); // every 45 seconds
-  </script>
+  // Gegnerische Aktivität
+  setInterval(() => {
+    const lat = 43.9 + Math.random();
+    const lng = 18.3 + Math.random();
+    L.circle([lat, lng], { color: 'red', radius: 4000 }).addTo(map);
+    log(`⚠️ Enemy detected near ${lat.toFixed(2)},${lng.toFixed(2)}`);
+  }, 30000);
+</script>
 </body>
 </html>
